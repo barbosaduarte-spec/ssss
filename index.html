@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jogo da Memória - Ranking Global</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #1e1e2f;
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      margin: 0;
+    }
+    h1 { margin-bottom: 5px; }
+    p.finalidade {
+      color: #b0b0c3;
+      max-width: 500px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .controles {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    input, button {
+      padding: 10px;
+      border-radius: 5px;
+      border: none;
+      font-size: 16px;
+    }
+    button {
+      background-color: #4caf50;
+      color: white;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button:hover { background-color: #45a049; }
+    .status { font-size: 18px; margin-bottom: 15px; }
+    .tabuleiro {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(65px, 80px));
+      gap: 10px;
+      margin-bottom: 30px;
+      width: 100%;
+      max-width: 350px;
+      justify-content: center;
+    }
+    .carta {
+      width: 100%;
+      height: 80px;
+      background-color: #3a3a5c;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .carta.virada { background-color: #ffffff; color: #000; }
+    .carta.combinada { background-color: #2e7d32; cursor: default; }
+    .ranking {
+      background-color: #2a2a40;
+      padding: 15px 25px;
+      border-radius: 8px;
+      width: 100%;
+      max-width: 350px;
+      box-sizing: border-box;
+    }
+    .ranking h2 { margin-top: 0; font-size: 20px; text-align: center; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid #3f3f5e;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Jogo da Memória</h1>
+  <p class="finalidade">Finalidade: Exercitar a concentração e registrar os jogadores com menos movimentos no ranking.</p>
+
+  <div class="controles">
+    <input type="text" id="nomeJogador" placeholder="Digite seu nome" maxlength="15">
+    <button onclick="iniciarJogo()">Iniciar / Reiniciar</button>
+  </div>
+
+  <div class="status">Movimentos: <span id="movimentos">0</span></div>
+
+  <div class="tabuleiro" id="tabuleiro"></div>
+
+  <div class="ranking">
+    <h2>🏆 Melhores Pontuações</h2>
+    <ul id="listaRanking">Carregando ranking...</ul>
+  </div>
+
+  <script>
+    // COLE AQUI A URL DO SEU BANCO FIREBASE TERMINANDO COM /ranking.json
+    // Exemplo: "https://seu-projeto-default-rtdb.firebaseio.com/ranking.json"
+    const FIREBASE_URL = "";
+
+    const emojis = ['🚀', '🎮', '💻', '🔥', '⚡', '🎯', '🌟', '💎'];
+    let cartas = [];
+    let cartasViradas = [];
+    let movimentos = 0;
+    let paresEncontrados = 0;
+    let bloqueado = false;
+    let timerDesvirar = null;
+
+    // Embaralhamento justo (Fisher-Yates)
+    function embaralhar(array) {
+      const copia = [...array];
+      for (let i = copia.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copia[i], copia[j]] = [copia[j], copia[i]];
+      }
+      return copia;
+    }
+
+    function iniciarJogo() {
+      clearTimeout(timerDesvirar);
+      const tabuleiro = document.getElementById('tabuleiro');
+      tabuleiro.innerHTML = '';
+      cartasViradas = [];
+      movimentos = 0;
+      paresEncontrados = 0;
+      bloqueado = false;
+      document.getElementById('movimentos').innerText = movimentos;
+
+      cartas = embaralhar([...emojis, ...emojis]);
+
+      cartas.forEach((emoji, index) => {
+        const div = document.createElement('div');
+        div.classList.add('carta');
+        div.dataset.valor = emoji;
+        div.dataset.index = index;
+        div.innerText = '?';
+        div.onclick = () => virarCarta(div);
+        tabuleiro.appendChild(div);
+      });
+    }
+
+    function virarCarta(carta) {
+      if (bloqueado || carta.classList.contains('virada') || carta.classList.contains('combinada')) return;
+
+      carta.classList.add('virada');
+      carta.innerText = carta.dataset.valor;
+      cartasViradas.push(carta);
+
+      if (cartasViradas.length === 2) {
+        movimentos++;
+        document.getElementById('movimentos').innerText = movimentos;
+        verificarPar();
+      }
+    }
+
+    function verificarPar() {
+      bloqueado = true;
+      const [c1, c2] = cartasViradas;
+
+      if (c1.dataset.valor === c2.dataset.valor) {
+        c1.classList.add('combinada');
+        c2.classList.add('combinada');
+        paresEncontrados++;
+        cartasViradas = [];
+        bloqueado = false;
+
+        if (paresEncontrados === emojis.length) {
+          setTimeout(finalizarJogo, 250);
+        }
+      } else {
+        timerDesvirar = setTimeout(() => {
+          c1.classList.remove('virada');
+          c2.classList.remove('virada');
+          c1.innerText = '?';
+          c2.innerText = '?';
+          cartasViradas = [];
+          bloqueado = false;
+        }, 800);
+      }
+    }
+
+    async function finalizarJogo() {
+      const nomeInput = document.getElementById('nomeJogador').value.trim();
+      const nome = nomeInput || 'Anônimo';
+      alert(`Parabéns, ${nome}! Você venceu em ${movimentos} movimentos.`);
+
+      await salvarPontuacao(nome, movimentos);
+      carregarRanking();
+    }
+
+    async function salvarPontuacao(nome, pontos) {
+      const novoRegistro = {
+        nome,
+        pontos,
+        data: new Date().toLocaleDateString('pt-BR')
+      };
+
+      try {
+        if (FIREBASE_URL) {
+          const resposta = await fetch(FIREBASE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(novoRegistro)
+          });
+          if (!resposta.ok) throw new Error('Falha ao salvar no servidor');
+        } else {
+          const local = JSON.parse(localStorage.getItem('rankingMemoria') || '[]');
+          local.push(novoRegistro);
+          localStorage.setItem('rankingMemoria',
